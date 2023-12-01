@@ -6,6 +6,6 @@ import XCTest
 final class AdventDayTests: XCTestCase {
   func testInitData() throws {
     let challenge = Day00()
-    XCTAssertTrue(challenge.data.starts(with: "4514"))
+    XCTAssertTrue(challenge.data.starts(with: "2qlljdqcbeight"))
   }
 }
