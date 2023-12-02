@@ -42,7 +42,7 @@ struct Day00: AdventDay {
 					startIndex = line.index(range.lowerBound, offsetBy: 2)
 				}
 				
-				print("in: \($0) out: \(line)")
+//				print("in: \($0) out: \(line)")
 				return line
 			}
 		}
