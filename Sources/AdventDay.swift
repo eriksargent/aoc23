@@ -67,6 +67,7 @@ extension AdventDay {
 
     // On Windows, line separators may be CRLF. Converting to LF so that \n 
     // works for string parsing.
-    return data.replacingOccurrences(of: "\r", with: "")
+	// Also strip any leading or trailing newlines
+    return data.replacingOccurrences(of: "\r", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
   }
 }

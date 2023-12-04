@@ -38,3 +38,13 @@ let package = Package(
         )
     ]
 )
+
+// https://stackoverflow.com/a/75608198/866149
+let swiftSettings: [SwiftSetting] = [
+	.enableUpcomingFeature("BareSlashRegexLiterals")
+]
+
+for target in package.targets {
+	target.swiftSettings = target.swiftSettings ?? []
+	target.swiftSettings?.append(contentsOf: swiftSettings)
+}

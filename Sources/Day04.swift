@@ -8,238 +8,104 @@ struct Day04: AdventDay {
 	// Save your data in a corresponding text file in the `Data` directory.
 	var data: String
 	
-	struct EngineTable: CustomStringConvertible {
-		let width: Int
-		let height: Int
-		var grid: [[Symbol]]
+	struct Card {
+		let card: Int
+		let winning: [Int]
+		let numbers: [Int]
 		
-		enum Symbol {
-			case number(Int)
-			case symbol(Character)
-			case gear
-			case empty
-			
-			static func symbol(from char: Character) -> Symbol {
-				if char.isNumber, let number = Int(String(char)) {
-					return .number(number)
-				}
-				else if char == "." {
-					return .empty
-				}
-				else if char == "*" {
-					return .gear
-				}
-				else {
-					return .symbol(char)
-				}
-			}
-			
-			var stringValue: String {
-				switch self {
-				case .number(let number):
-					return "\(number)"
-				case .symbol(let symbol):
-					return String(symbol)
-				case .gear:
-					return "*"
-				case .empty:
-					return "."
-				}
-			}
+		var numbersWon: [Int] {
+			numbers.filter({ winning.contains($0) })
 		}
 		
-		init(data: String) {
-			let lines = data.components(separatedBy: .newlines)
-			
-			grid = lines.map { line in
-				line.map(Symbol.symbol(from:))
+		var points: Int {
+			let count = numbersWon.count
+			if count == 0 {
+				return 0
 			}
-			height = grid.count
-			width = grid.first?.count ?? 0
+			return 1 << (count - 1)
 		}
 		
-		var description: String {
-			"\(width)×\(height) Grid:\n" + gridString
-		}
-		
-		var gridString: String {
-			grid.map({ $0.map(\.stringValue).joined() }).joined(separator: "\n")
-		}
-		
-		func getPartNums() -> [Int] {
-			var valid = [Int]()
-			
-			for rowIndex in 0..<height {
-				let row = grid[rowIndex]
-				var index = 0
-				while index < width {
-					switch row[index] {
-					case .empty, .symbol, .gear:
-						index += 1
-					case .number:
-						if let (number, length) = getNumber(starting: index, row: rowIndex) {
-							if findSymbol(starting: index, row: rowIndex, length: length) {
-								valid.append(number)
-							}
-							index += length
-						}
-						else {
-							index += 1
-						}
+		init?(from string: String) {
+			let cardRef = Reference(Int.self)
+			let winningRef = Reference([Int].self)
+			let numbersRef = Reference([Int].self)
+			let regex = Regex {
+				"Card "
+				ZeroOrMore(.whitespace)
+				TryCapture(as: cardRef, { OneOrMore(.digit) }, transform: { Int($0) })
+				":"
+				OneOrMore(.whitespace)
+				Capture(as: winningRef, {
+					OneOrMore {
+						OneOrMore(.digit)
+						OneOrMore(.whitespace)
 					}
-				}
-			}
-			
-			return valid
-		}
-		
-		func getNumber(starting: Int, row: Int, considerReverse: Bool = false) -> (number: Int, length: Int)? {
-			guard case .number = grid[row][starting] else { return nil }
-			var length = 0
-			var number = 0
-			var revLength = 0
-			
-			if considerReverse && starting > 0 {
-				revLength = 1
-				while starting - revLength >= 0, case .number = grid[row][starting - revLength] {
-					revLength += 1
-				}
-				revLength -= 1
-			}
-			
-			while starting - revLength + length < width {
-				switch grid[row][starting - revLength + length] {
-				case .empty, .symbol, .gear:
-					return (number: number, length: length - revLength)
-				case .number(let num):
-					number = number * 10 + num
-					length += 1
-				}
-			}
-			
-			return (number: number, length: length - revLength)
-		}
-		
-		func findSymbol(starting: Int, row: Int, length: Int) -> Bool {
-			let minColumn = max(starting - 1, 0)
-			let maxColumn = min(starting + length, width - 1)
-			
-			if row > 0 {
-				for index in minColumn...maxColumn {
-					switch grid[row - 1][index] {
-					case .symbol, .gear:
-						return true
-					default: continue
+				}, transform: {
+					$0.components(separatedBy: .whitespaces).compactMap(Int.init)
+				})
+				"|"
+				OneOrMore(.whitespace)
+				Capture(as: numbersRef, {
+					OneOrMore {
+						OneOrMore(.digit)
+						ZeroOrMore(.whitespace)
 					}
-				}
+				}, transform: {
+					$0.components(separatedBy: .whitespaces).compactMap(Int.init)
+				})
 			}
 			
-			if starting > 0 {
-				switch grid[row][starting - 1] {
-				case .symbol, .gear: return true
-				default: break
-				}
-			}
-			else if starting + length < width {
-				switch grid[row][starting + length] {
-				case .symbol, .gear: return true
-				default: break
-				}
-			}
+			guard let match = string.firstMatch(of: regex) else { return nil }
 			
-			if row + 1 < height {
-				for index in minColumn...maxColumn {
-					switch grid[row + 1][index] {
-					case .symbol, .gear:
-						return true
-					default: continue
-					}
-				}
-			}
-			
-			return false
-		}
-		
-		func getGearRatios() -> [Int] {
-			var ratios = [Int]()
-			
-			for rowIndex in 0..<height {
-				let row = grid[rowIndex]
-				for index in 0..<width {
-					switch row[index] {
-					case .gear:
-						let adjacentParts = findAdjacentNumbers(at: index, row: rowIndex)
-						if adjacentParts.count == 2 {
-							ratios.append(adjacentParts.reduce(1, *))
-						}
-					default:
-						break
-					}
-				}
-			}
-			
-			return ratios
-		}
-		
-		func findAdjacentNumbers(at column: Int, row: Int) -> [Int] {
-			let minColumn = max(column - 1, 0)
-			let maxColumn = min(column + 1, width - 1)
-			var adjacentNumbers = [Int]()
-			
-			if row > 0 {
-				var index = minColumn
-				while index <= maxColumn {
-					if let (number, length) = getNumber(starting: index, row: row - 1, considerReverse: true) {
-						adjacentNumbers.append(number)
-						index += length
-					}
-					else {
-						index += 1
-					}
-				}
-			}
-			
-			if column > 0, let (number, _) = getNumber(starting: column - 1, row: row, considerReverse: true) {
-				adjacentNumbers.append(number)
-			}
-			if column + 1 < width, let (number, _) = getNumber(starting: column + 1, row: row, considerReverse: true) {
-				adjacentNumbers.append(number)
-			}
-			
-			if row + 1 < height {
-				var index = minColumn
-				while index <= maxColumn {
-					if let (number, length) = getNumber(starting: index, row: row + 1, considerReverse: true) {
-						adjacentNumbers.append(number)
-						index += length
-					}
-					else {
-						index += 1
-					}
-				}
-			}
-			
-			return adjacentNumbers
+			self.card = match[cardRef]
+			self.winning = match[winningRef]
+			self.numbers = match[numbersRef]
 		}
 	}
 	
+	
 	func part1() -> Any {
-		let input = data.trimmingCharacters(in: .whitespacesAndNewlines)
-		let table = EngineTable(data: input)
-//		print(table)
-		assert(table.gridString == input)
-		let partNumbers = table.getPartNums()
-//		print(partNumbers)
-		return partNumbers.sum()
+		let cards = data.components(separatedBy: .newlines).compactMap(Card.init(from:))
+		var generated = [String]()
+#if DEBUG
+		for card in cards {
+			print("Card \(card.card) is worth \(card.points) with winning numbers \(card.numbersWon)")
+			var string = "Card \(pad: card.card, toWidth: cards.count > 100 ? 3 : 1):"
+			for num in card.winning {
+				string += " \(pad: num, toWidth: 2)"
+			}
+			string += " |"
+			for num in card.numbers {
+				string += " \(pad: num, toWidth: 2)"
+			}
+			generated.append(string)
+		}
+		assert(generated.joined(separator: "\n") == data)
+#endif
+		return cards.map(\.points).sum()
 	}
 	
 	func part2() -> Any {
-		let input = data.trimmingCharacters(in: .whitespacesAndNewlines)
-		let table = EngineTable(data: input)
-//		print(table)
-		assert(table.gridString == input)
-		let gearRatios = table.getGearRatios()
-//		print(gearRatios)
-		return gearRatios.sum()
+		let cards = data.components(separatedBy: .newlines).compactMap(Card.init(from:))
+		var counts = [Int](repeating: 1, count: cards.count)
+		
+		for (index, card) in cards.enumerated() {
+			let winning = card.numbersWon.count
+			if winning > 0 {
+				let thisCount = counts[index]
+				for next in (index + 1)...(index + winning) {
+					counts[next] += thisCount
+				}
+			}
+		}
+		
+		return counts.sum()
+	}
+}
+
+
+extension DefaultStringInterpolation {
+	mutating func appendInterpolation(pad value: Int, toWidth width: Int, using paddingCharacter: String = " ") {
+		appendInterpolation(String(String("\(value)".reversed()).padding(toLength: width, withPad: paddingCharacter, startingAt: 0).reversed()))
 	}
 }
