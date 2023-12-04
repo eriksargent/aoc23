@@ -8,238 +8,126 @@ struct Day02: AdventDay {
 	// Save your data in a corresponding text file in the `Data` directory.
 	var data: String
 	
-	struct EngineTable: CustomStringConvertible {
-		let width: Int
-		let height: Int
-		var grid: [[Symbol]]
+	enum CubeColor: String {
+		case red
+		case green
+		case blue
+	}
+	
+	struct Game: CustomStringConvertible {
+		var id: Int
+		var draws: [Draw]
 		
-		enum Symbol {
-			case number(Int)
-			case symbol(Character)
-			case gear
-			case empty
+		struct Draw: CustomStringConvertible {
+			var cubes: [Cube]
 			
-			static func symbol(from char: Character) -> Symbol {
-				if char.isNumber, let number = Int(String(char)) {
-					return .number(number)
-				}
-				else if char == "." {
-					return .empty
-				}
-				else if char == "*" {
-					return .gear
-				}
-				else {
-					return .symbol(char)
+			struct Cube: CustomStringConvertible {
+				var count: Int
+				var cube: CubeColor
+				
+				var description: String {
+					"\(count) \(cube.rawValue)"
 				}
 			}
 			
-			var stringValue: String {
-				switch self {
-				case .number(let number):
-					return "\(number)"
-				case .symbol(let symbol):
-					return String(symbol)
-				case .gear:
-					return "*"
-				case .empty:
-					return "."
-				}
+			var description: String {
+				cubes.map(\.description).joined(separator: ", ")
 			}
-		}
-		
-		init(data: String) {
-			let lines = data.components(separatedBy: .newlines)
 			
-			grid = lines.map { line in
-				line.map(Symbol.symbol(from:))
+			func all(_ color: CubeColor) -> Int {
+				cubes.filter(where: \.cube, is: color).map(\.count).sum()
 			}
-			height = grid.count
-			width = grid.first?.count ?? 0
+			
+			static func parse(from string: String) -> Draw? {
+				let countRef = Reference(Int.self)
+				let colorRef = Reference(CubeColor.self)
+				let regex = Regex {
+					TryCapture(as: countRef) {
+						OneOrMore(.digit)
+					} transform: { match in
+						Int(match)
+					}
+					" "
+					TryCapture(as: colorRef) {
+						OneOrMore(.word)
+					} transform: { match in
+						CubeColor(rawValue: String(match))
+					}
+				}
+				
+				let cubes = string.components(separatedBy: ",").compactMap({ $0.firstMatch(of: regex) }).map({ Cube(count: $0[countRef], cube: $0[colorRef]) })
+				return Draw(cubes: cubes)
+			}
 		}
 		
 		var description: String {
-			"\(width)×\(height) Grid:\n" + gridString
+			"Game \(id): " + draws.map(\.description).joined(separator: "; ")
 		}
 		
-		var gridString: String {
-			grid.map({ $0.map(\.stringValue).joined() }).joined(separator: "\n")
+		static func parse(from string: String) -> Game? {
+			let gameNumberRef = Reference(Int.self)
+			let drawsRef = Reference(Substring.self)
+			let gameNumberRegex = Regex {
+				"Game "
+				
+				TryCapture(as: gameNumberRef) {
+					OneOrMore(.digit)
+				} transform: { match in
+					Int(match)
+				}
+				": "
+				
+				Capture(as: drawsRef) {
+					OneOrMore(.any)
+				}
+			}
+			
+			guard let match = string.firstMatch(of: gameNumberRegex) else { return nil }
+			
+			let number = match[gameNumberRef]
+			let drawsString = match[drawsRef]
+			
+			let draws = drawsString.components(separatedBy: ";").compactMap(Game.Draw.parse(from:))
+			return Game(id: number, draws: draws)
 		}
 		
-		func getPartNums() -> [Int] {
-			var valid = [Int]()
-			
-			for rowIndex in 0..<height {
-				let row = grid[rowIndex]
-				var index = 0
-				while index < width {
-					switch row[index] {
-					case .empty, .symbol, .gear:
-						index += 1
-					case .number:
-						if let (number, length) = getNumber(starting: index, row: rowIndex) {
-							if findSymbol(starting: index, row: rowIndex, length: length) {
-								valid.append(number)
-							}
-							index += length
-						}
-						else {
-							index += 1
-						}
-					}
-				}
+		func isPossible(usingRed red: Int, green: Int, blue: Int) -> Bool {
+			draws.allSatisfy { draw in
+				draw.all(.red) <= red && draw.all(.green) <= green && draw.all(.blue) <= blue
 			}
-			
-			return valid
 		}
 		
-		func getNumber(starting: Int, row: Int, considerReverse: Bool = false) -> (number: Int, length: Int)? {
-			guard case .number = grid[row][starting] else { return nil }
-			var length = 0
-			var number = 0
-			var revLength = 0
-			
-			if considerReverse && starting > 0 {
-				revLength = 1
-				while starting - revLength >= 0, case .number = grid[row][starting - revLength] {
-					revLength += 1
-				}
-				revLength -= 1
-			}
-			
-			while starting - revLength + length < width {
-				switch grid[row][starting - revLength + length] {
-				case .empty, .symbol, .gear:
-					return (number: number, length: length - revLength)
-				case .number(let num):
-					number = number * 10 + num
-					length += 1
-				}
-			}
-			
-			return (number: number, length: length - revLength)
+		var minimumPossible: (red: Int, green: Int, blue: Int) {
+			let red = draws.map({ $0.all(.red) }).max() ?? 0
+			let green = draws.map({ $0.all(.green) }).max() ?? 0
+			let blue = draws.map({ $0.all(.blue) }).max() ?? 0
+			return (red: red, green: green, blue: blue)
 		}
 		
-		func findSymbol(starting: Int, row: Int, length: Int) -> Bool {
-			let minColumn = max(starting - 1, 0)
-			let maxColumn = min(starting + length, width - 1)
-			
-			if row > 0 {
-				for index in minColumn...maxColumn {
-					switch grid[row - 1][index] {
-					case .symbol, .gear:
-						return true
-					default: continue
-					}
-				}
-			}
-			
-			if starting > 0 {
-				switch grid[row][starting - 1] {
-				case .symbol, .gear: return true
-				default: break
-				}
-			}
-			else if starting + length < width {
-				switch grid[row][starting + length] {
-				case .symbol, .gear: return true
-				default: break
-				}
-			}
-			
-			if row + 1 < height {
-				for index in minColumn...maxColumn {
-					switch grid[row + 1][index] {
-					case .symbol, .gear:
-						return true
-					default: continue
-					}
-				}
-			}
-			
-			return false
+		var power: Int {
+			let minimum = minimumPossible
+			return minimum.red * minimum.green * minimum.blue
 		}
-		
-		func getGearRatios() -> [Int] {
-			var ratios = [Int]()
-			
-			for rowIndex in 0..<height {
-				let row = grid[rowIndex]
-				for index in 0..<width {
-					switch row[index] {
-					case .gear:
-						let adjacentParts = findAdjacentNumbers(at: index, row: rowIndex)
-						if adjacentParts.count == 2 {
-							ratios.append(adjacentParts.reduce(1, *))
-						}
-					default:
-						break
-					}
-				}
-			}
-			
-			return ratios
-		}
-		
-		func findAdjacentNumbers(at column: Int, row: Int) -> [Int] {
-			let minColumn = max(column - 1, 0)
-			let maxColumn = min(column + 1, width - 1)
-			var adjacentNumbers = [Int]()
-			
-			if row > 0 {
-				var index = minColumn
-				while index <= maxColumn {
-					if let (number, length) = getNumber(starting: index, row: row - 1, considerReverse: true) {
-						adjacentNumbers.append(number)
-						index += length
-					}
-					else {
-						index += 1
-					}
-				}
-			}
-			
-			if column > 0, let (number, _) = getNumber(starting: column - 1, row: row, considerReverse: true) {
-				adjacentNumbers.append(number)
-			}
-			if column + 1 < width, let (number, _) = getNumber(starting: column + 1, row: row, considerReverse: true) {
-				adjacentNumbers.append(number)
-			}
-			
-			if row + 1 < height {
-				var index = minColumn
-				while index <= maxColumn {
-					if let (number, length) = getNumber(starting: index, row: row + 1, considerReverse: true) {
-						adjacentNumbers.append(number)
-						index += length
-					}
-					else {
-						index += 1
-					}
-				}
-			}
-			
-			return adjacentNumbers
-		}
+	}
+	
+	func parseGames() -> [Game] {
+		let lines = data.components(separatedBy: .newlines).filter({ $0 != "" })
+		let games = lines.compactMap(Game.parse(from:))
+		let errors = zip(lines, games.map(\.description)).filter({ $0 != $1 })
+		assert(errors.isEmpty)
+		return games
 	}
 	
 	func part1() -> Any {
-		let input = data.trimmingCharacters(in: .whitespacesAndNewlines)
-		let table = EngineTable(data: input)
-//		print(table)
-		assert(table.gridString == input)
-		let partNumbers = table.getPartNums()
-//		print(partNumbers)
-		return partNumbers.sum()
+		let games = parseGames()
+		
+		return games.filter({ $0.isPossible(usingRed: 12, green: 13, blue: 14) }).map(\.id).sum()
 	}
 	
 	func part2() -> Any {
-		let input = data.trimmingCharacters(in: .whitespacesAndNewlines)
-		let table = EngineTable(data: input)
-//		print(table)
-		assert(table.gridString == input)
-		let gearRatios = table.getGearRatios()
-//		print(gearRatios)
-		return gearRatios.sum()
+		let games = parseGames()
+		
+		let powers = games.map(\.power)
+		return powers.sum()
 	}
 }
