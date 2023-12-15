@@ -137,7 +137,7 @@ struct Day14: AdventDay {
 		
 		let load = shiftNorth(lines: &lines)
 		
-		print(lines.map({ String($0.map(\.char)) }).joined(separator: "\n"))
+//		print(lines.map({ String($0.map(\.char)) }).joined(separator: "\n"))
 		
 		return load
 	}
@@ -155,7 +155,7 @@ struct Day14: AdventDay {
 			let load = shiftEast(lines: &lines)
 			return load
 		})
-		print(pattern)
+//		print(pattern)
 		
 		guard let lastItem = pattern.last, let lastIndex = pattern.dropLast().lastIndex(of: lastItem) else { return 0 }
 		let cycleLength = pattern.count - lastIndex - 1

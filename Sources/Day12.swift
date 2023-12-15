@@ -9,7 +9,23 @@ struct Day12: AdventDay {
 	// Save your data in a corresponding text file in the `Data` directory.
 	var data: String
 	
-	func possibleArrangements(for line: String, unfold: Bool, cache: NSCache<NSString, NSString>) -> Int {
+	actor Cache {
+		var _cache: [String: Bool] = [:]
+		
+		func get(_ key: String) -> Bool? {
+			return _cache[key]
+		}
+		
+		func set(_ key: String, value: Bool) {
+			_cache[key] = value
+		}
+	}
+	
+	func hashes(length: Int) -> String {
+		return String(Array<Character>.init(repeating: "#", count: length))
+	}
+	
+	func possibleArrangements(for line: String, unfold: Bool, cache: Cache) async -> Int {
 		guard line.contains("?") else {
 			return 0
 		}
@@ -23,187 +39,168 @@ struct Day12: AdventDay {
 			parity = [[Int]](repeating: parity, count: 5).flatMap({ $0 })
 		}
 		
-		let result = search(string: groups.joined(separator: "."), parity: ArraySlice(parity), cache: cache)!.map({ $0.replacingOccurrences(of: "?", with: ".") })
-		
-		let countUnique = Set(result).count
-//		print("line \(line) had a result of \(result.count)")
-//		print("Produced unique options: \(result)")
-		
-		return countUnique
+		return await accumulate(string: groups.joined(separator: "."), parity: ArraySlice(parity), cache: cache)
 	}
 	
-	func search(string: String, parity: ArraySlice<Int>, cache: NSCache<NSString, NSString>) -> [String]? {
-		let cacheKey = NSString(string: "\(string)\(parity.map({ String($0) }).joined(separator: "-"))")
-		let shouldCache = cacheKey.length < 20
-		if shouldCache, let existing = cache.object(forKey: cacheKey) {
-			if existing == "" {
-				return nil
+//	static var validCache = Cache()
+	func isSequenceValid(string: String, parity: ArraySlice<Int>, tooLong: String, cache: Cache) async -> Bool {
+		let key = key(from: string, parity: parity)
+		if let cached = await cache.get(key) {
+			return cached
+		}
+		
+		if (parity.isEmpty && string.contains(/(\#|\?)/)) ||
+			(string == "" && !parity.isEmpty) ||
+			(string.filter({ $0 == "#" }).count > parity.sum()) ||
+			(parity.sum() + parity.count - 1 > string.count) ||
+			string.contains(tooLong) {
+			await cache.set(key, value: false)
+			return false
+		}
+		
+		let groups = string.components(separatedBy: ".").filter({ $0 != "" })
+		for (group, parity) in zip(groups, parity) {
+			if group == hashes(length: parity) {
+				continue
+			}
+			else if group.contains("?") {
+				await cache.set(key, value: true)
+				return true
 			}
 			else {
-				return existing.components(separatedBy: ";")
+				await cache.set(key, value: false)
+				return false
 			}
 		}
 		
-		if parity.isEmpty {
-			if string.contains("#") {
-				if shouldCache {
-					cache.setObject(NSString(string: ""), forKey: cacheKey)
-				}
-				return nil
-			}
-			else {
-				return [string]
-			}
-		}
-		else if string.isEmpty {
-			if shouldCache {
-				cache.setObject(NSString(string: ""), forKey: cacheKey)
-			}
-			return nil
+		await cache.set(key, value: true)
+		return true
+	}
+	
+	func prune(string: String, parity: ArraySlice<Int>) -> (string: String, parity: ArraySlice<Int>) {
+		var groups = string.components(separatedBy: ".").filter({ $0 != "" })
+		var parity = parity
+		if let index = zip(groups, parity).enumerated().lazy.filter({ (_, arg1) in
+			let (group, parity) = arg1
+			return !(group.count == parity && !group.contains("?"))
+		}).map(\.0).first, index > 0 {
+			groups.removeFirst(index)
+			parity.removeFirst(index)
 		}
 		
-		var groupLength = -1
-		for (index, character) in string.indexed() {
-			if character == "#" {
-				if groupLength < 0 {
-					groupLength = 1
+		return (groups.joined(separator: "."), ArraySlice(parity))
+	}
+	
+	func getBlock(string: String, parity: ArraySlice<Int>, count: Int) -> [(string: String, parity: ArraySlice<Int>, count: Int)] {
+		let questions = string.filter({ $0 == "?" }).count
+		let qcount =  min(questions, 5)
+		let fills = Set([[String]](repeating: [".", "#"], count: qcount).flatMap({ $0 }).combinations(ofCount: qcount).map({ $0 }))
+		var blocks = [(string: String, parity: ArraySlice<Int>, count: Int)]()
+		for var fill in fills {
+			var newString = ""
+			for character in string {
+				if character != "?" {
+					newString += String(character)
 				}
 				else {
-					groupLength += 1
-				}
-				
-				if let first = parity.first, groupLength > first {
-					if shouldCache {
-						cache.setObject(NSString(string: ""), forKey: cacheKey)
-					}
-					return nil
-				}
-				else if groupLength == parity.first, string.index(after: index) == string.endIndex && parity.count == 1 {
-					if shouldCache {
-						cache.setObject(NSString(string: string), forKey: cacheKey)
-					}
-					return [string]
-				}
-				else if groupLength == parity.first && string[index...].dropFirst().first != "#" {
-					let substring = String(string[string.index(after: index)...].dropFirst())
-					let leadingString = String(string[string.startIndex...index]) + "."
-					let results = search(string: substring, parity: parity.dropFirst(), cache: cache)
-					let toReturn = results?.map({ leadingString + $0 })
-					if shouldCache {
-						cache.setObject(NSString(string: toReturn?.joined(separator: ";") ?? ""), forKey: cacheKey)
-					}
-					return toReturn
-				}
-			}
-			else if character == "." {
-				if groupLength < 1 {
-					continue
-				}
-				else if groupLength == parity.first {
-					let substring = String(string[string.index(after: index)...])
-					let leadingString = String(string[string.startIndex...index])
-					let results = search(string: substring, parity: parity.dropFirst(), cache: cache)
-					let toReturn = results?.map({ leadingString + $0 })
-					if shouldCache {
-						cache.setObject(NSString(string: toReturn?.joined(separator: ";") ?? ""), forKey: cacheKey)
-					}
-					return toReturn
-				}
-				else {
-					if shouldCache {
-						cache.setObject(NSString(string: ""), forKey: cacheKey)
-					}
-					return nil
-				}
-			}
-			else if character == "?" {
-				if groupLength == parity.first || (groupLength == -1 && parity.first == 1 && string.index(after: index) == string.endIndex) {
-					var modString = string
-					if groupLength == parity.first {
-						modString = String(string.replacingCharacters(in: index..<string.index(after: index), with: "."))
+					if !fill.isEmpty {
+						newString += fill.removeFirst()
 					}
 					else {
-						modString = String(string.replacingCharacters(in: index..<string.index(after: index), with: "#"))
+						newString += String(character)
 					}
-					if string.index(after: index) == string.endIndex {
-						if parity.count == 1 {
-							if shouldCache {
-								cache.setObject(NSString(string: modString), forKey: cacheKey)
-							}
-							return [modString]
-						}
-						else {
-							if shouldCache {
-								cache.setObject(NSString(string: ""), forKey: cacheKey)
-							}
-							return nil
-						}
-					}
-					let leadingString = String(modString[string.startIndex...index])
-					let substring = String(string[string.index(after: index)...])
-					let results = search(string: substring, parity: parity.dropFirst(), cache: cache)
-					let toReturn = results?.map({ leadingString + $0 })
-					if shouldCache {
-						cache.setObject(NSString(string: toReturn?.joined(separator: ";") ?? ""), forKey: cacheKey)
-					}
-					return toReturn
 				}
-				
-				var toReturn = [String]()
-				let branchAString = String(string.replacingCharacters(in: index..<string.index(after: index), with: "#"))
-				let branchBString = String(string.replacingCharacters(in: index..<string.index(after: index), with: "."))
-				if let branchA = search(string: branchAString, parity: parity, cache: cache), !branchA.isEmpty {
-					toReturn.append(contentsOf: branchA)
+			}
+			blocks.append((newString, parity, count))
+		}
+		
+		return blocks
+	}
+	
+	func key(from string: String, parity: ArraySlice<Int>) -> String {
+		string + ":" + parity.map({ String($0) }).joined(separator: "-")
+	}
+	
+	func accumulate(string: String, parity: ArraySlice<Int>, cache: Cache) async -> Int {
+		var heap = [String: Int]()
+		var newHeap = [String: Int]()
+		var block = getBlock(string: string, parity: parity, count: 1)
+		let tooLong = hashes(length: (parity.max() ?? 1) + 1)
+		for (string, parity, count) in block {
+			let (newString, newParity) = prune(string: string, parity: parity)
+			if await isSequenceValid(string: newString, parity: newParity, tooLong: tooLong, cache: cache) {
+				let key = key(from: newString, parity: newParity)
+				if let existing = newHeap[key] {
+					newHeap[key] = existing + count
 				}
-				if let branchB = search(string: branchBString, parity: parity, cache: cache), !branchB.isEmpty {
-					toReturn.append(contentsOf: branchB)
+				else {
+					newHeap[key] = count
 				}
-				if shouldCache {
-					cache.setObject(NSString(string: toReturn.joined(separator: ";")), forKey: cacheKey)
-				}
-				return toReturn
 			}
 		}
 		
-		if shouldCache {
-			cache.setObject(NSString(string: ""), forKey: cacheKey)
+		var hasQuestion = newHeap.keys.first?.contains("?") == true
+		while hasQuestion {
+			heap = newHeap
+			newHeap = [:]
+			block = []
+			for (key, count) in heap {
+				let comps = key.components(separatedBy: ":")
+				if comps.count != 2 { continue }
+				let string = comps[0]
+				let parity = ArraySlice(comps[1].components(separatedBy: "-").compactMap(Int.init))
+				block.append(contentsOf: getBlock(string: string, parity: parity, count: count))
+			}
+			
+			for (string, parity, count) in block {
+				let (newString, newParity) = prune(string: string, parity: parity)
+				if await isSequenceValid(string: newString, parity: newParity, tooLong: tooLong, cache: cache) {
+					let key = key(from: newString, parity: newParity)
+					if let existing = newHeap[key] {
+						newHeap[key] = existing + count
+					}
+					else {
+						newHeap[key] = count
+					}
+				}
+			}
+			
+			hasQuestion = newHeap.keys.first?.contains("?") == true
 		}
-		return nil
+		
+		return newHeap.values.sum()
 	}
 	
 	func part1() async -> Any {
-		let cache = NSCache<NSString, NSString>()
-		return data.components(separatedBy: .newlines).map({ possibleArrangements(for: $0, unfold: false, cache: cache) }).sum()
+		let lines = data.components(separatedBy: .newlines)
+		var total = 0
+		for line in lines {
+			total += await possibleArrangements(for: line, unfold: false, cache: Cache())
+		}
+		return total
 	}
 	
 	func part2() async -> Any {
-//		let lines = data.components(separatedBy: .newlines)
-//			
-//		let cache = NSCache<NSString, NSString>()
-//		cache.evictsObjectsWithDiscardedContent = true
-//		cache.countLimit = 200000
-//		return await withTaskGroup(of: Int.self, returning: Int.self) { group in
-//			for (chunkIndex, chunk) in lines.chunks(ofCount: max(lines.count / 10, 1)).enumerated() {
-//				group.addTask {
-//					var total = 0
-//					for (index, line) in chunk.enumerated() {
-//						total += possibleArrangements(for: line, unfold: true, cache: cache)
-//						print("\(index + 1)/\(chunk.count) - chunk \(chunkIndex)")
-////						cache.removeAllObjects()
-//					}
-//					return total
-//				}
-//			}
-//			
-//			var results = 0
-//			for await result in group {
-//				results += result
-//			}
-//			
-//			return results
-//		}
-//			data.components(separatedBy: .newlines).map({ possibleArrangements(for: $0, unfold: true) }).sum()
-		
-		return 0
+		let lines = data.components(separatedBy: .newlines)
+
+		return await withTaskGroup(of: Int.self, returning: Int.self) { group in
+			for (chunkIndex, chunk) in lines.chunks(ofCount: max(lines.count / 12, 1)).enumerated() {
+				group.addTask {
+					var cache = Cache()
+					var total = 0
+					for (index, line) in chunk.enumerated() {
+						total += await possibleArrangements(for: line, unfold: true, cache: cache)
+					}
+					return total
+				}
+			}
+			
+			var results = 0
+			for await result in group {
+				results += result
+			}
+			
+			return results
+		}
 	}
 }

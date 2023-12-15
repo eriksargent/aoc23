@@ -18,9 +18,9 @@ struct Day13: AdventDay {
 				let size = min($0.offset + 1, pattern.count - $1.offset)
 				let leftEnd = ($0.offset + pattern.startIndex)
 				let rightStart = (pattern.startIndex + $1.offset)
-				print(size)
-				print($0)
-				print($1)
+//				print(size)
+//				print($0)
+//				print($1)
 				return testFunction(
 					zip(pattern[(leftEnd - size + 1)...leftEnd], pattern[rightStart..<(rightStart + size)].reversed())
 				)

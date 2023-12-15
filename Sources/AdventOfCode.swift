@@ -86,11 +86,11 @@ struct AdventOfCode: AsyncParsableCommand {
 		let timing1 = await run(part: challenge.part1, named: "Part 1")
 		let timing2 = await run(part: challenge.part2, named: "Part 2")
 		
-		if benchmark {
+//		if benchmark {
 			print("Part 1 took \(timing1), part 2 took \(timing2).")
 #if DEBUG
 			print("Looks like you're benchmarking debug code. Try swift run -c release")
 #endif
-		}
+//		}
 	}
 }
