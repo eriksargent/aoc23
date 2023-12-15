@@ -70,8 +70,16 @@ struct AdventOfCode: AsyncParsableCommand {
 	
 	func run() async throws {
 		if all {
+			var allTimings = [(day: Int, timing1: Duration, timing2: Duration)]()
 			for day in allChallenges {
-				await execute(challenge: day)
+				let (timing1, timing2) = await execute(challenge: day)
+				allTimings.append((day.day, timing1, timing2))
+			}
+			
+			print("|Day|Part 1|Part 2|")
+			print("|---|------|------|")
+			for (day, timing1, timing2) in allTimings {
+				print("|\(day)|\(timing1))|\(timing2)|")
 			}
 		}
 		else {
@@ -80,17 +88,15 @@ struct AdventOfCode: AsyncParsableCommand {
 		}
 	}
 	
-	func execute(challenge: any AdventDay) async {
+	@discardableResult
+	func execute(challenge: any AdventDay) async -> (Duration, Duration) {
 		print("Executing Advent of Code challenge \(challenge.day)...")
 		
 		let timing1 = await run(part: challenge.part1, named: "Part 1")
 		let timing2 = await run(part: challenge.part2, named: "Part 2")
 		
-//		if benchmark {
-			print("Part 1 took \(timing1), part 2 took \(timing2).")
-#if DEBUG
-			print("Looks like you're benchmarking debug code. Try swift run -c release")
-#endif
-//		}
+		print("Part 1 took \(timing1), part 2 took \(timing2).")
+		
+		return (timing1, timing2)
 	}
 }

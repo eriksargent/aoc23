@@ -12,12 +12,20 @@ struct Day12: AdventDay {
 	actor Cache {
 		var _cache: [String: Bool] = [:]
 		
+		init(_ cache: [String: Bool] = [:]) {
+			self._cache = cache
+		}
+		
 		func get(_ key: String) -> Bool? {
 			return _cache[key]
 		}
 		
 		func set(_ key: String, value: Bool) {
 			_cache[key] = value
+		}
+		
+		func copy() async -> Cache {
+			return Cache(_cache)
 		}
 	}
 	
@@ -171,11 +179,12 @@ struct Day12: AdventDay {
 		return newHeap.values.sum()
 	}
 	
+	static let firstCache = Cache()
 	func part1() async -> Any {
 		let lines = data.components(separatedBy: .newlines)
 		var total = 0
 		for line in lines {
-			total += await possibleArrangements(for: line, unfold: false, cache: Cache())
+			total += await possibleArrangements(for: line, unfold: false, cache: Self.firstCache)
 		}
 		return total
 	}
@@ -184,11 +193,11 @@ struct Day12: AdventDay {
 		let lines = data.components(separatedBy: .newlines)
 
 		return await withTaskGroup(of: Int.self, returning: Int.self) { group in
-			for (chunkIndex, chunk) in lines.chunks(ofCount: max(lines.count / 12, 1)).enumerated() {
+			for chunk in lines.chunks(ofCount: max(lines.count / 12, 1)) {
 				group.addTask {
-					var cache = Cache()
+					let cache = await Self.firstCache.copy()
 					var total = 0
-					for (index, line) in chunk.enumerated() {
+					for line in chunk {
 						total += await possibleArrangements(for: line, unfold: true, cache: cache)
 					}
 					return total
