@@ -113,7 +113,7 @@ struct Day05: AdventDay {
 
 
 extension ClosedRange<Int> {
-	fileprivate func subtract(_ other: ClosedRange<Int>) -> [ClosedRange<Int>] {
+	func subtract(_ other: ClosedRange<Int>) -> [ClosedRange<Int>] {
 		if other.lowerBound > self.upperBound || other.upperBound < self.lowerBound {
 			return [self]
 		}
@@ -136,7 +136,7 @@ extension ClosedRange<Int> {
 		return []
 	}
 	
-	fileprivate func move(_ subrange: ClosedRange<Int>, by offset: Int) -> (ClosedRange<Int>?, [ClosedRange<Int>]) {
+	func move(_ subrange: ClosedRange<Int>, by offset: Int) -> (ClosedRange<Int>?, [ClosedRange<Int>]) {
 		if subrange.lowerBound > self.upperBound || subrange.upperBound < self.lowerBound {
 			return (nil, [self])
 		}
