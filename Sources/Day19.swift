@@ -187,7 +187,7 @@ struct Day19: AdventDay {
 		var acceptedRanges: [QuadrupleRange] = []
 		while let (workflow, startingAcceptance) = workflowQueue.popFirst() {
 			var remaining = startingAcceptance
-			for (ruleIndex, rule) in workflow.rules.enumerated() {
+			for rule in workflow.rules {
 				switch rule {
 				case .reject:
 					continue
